@@ -41,7 +41,7 @@ def extract_text_from_file(uploaded_file):
         raise ValueError("Unsupported file format")
 
 def get_gemini_response(prompt, resume_text, job_description):
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    model = genai.GenerativeModel("gemini-3.1-flash-lite")
 
     final_prompt = f"""
 {prompt}
@@ -53,7 +53,32 @@ RESUME:
 {resume_text}
 """
 
-    response = model.generate_content(final_prompt)
+    response = model.generate_content(
+        final_prompt,
+        generation_config={
+            "temperature": 0.2,
+            "max_output_tokens": 1000
+        }
+    )
+    return response.text
+
+def get_gemini_response5(prompt, resume_text, job_description,fast=True):
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    final_prompt = f"""
+{prompt}
+
+JOB DESCRIPTION:
+{job_description}
+
+RESUME:
+{resume_text}
+"""
+
+    response = model.generate_content(
+        final_prompt,
+        generation_config={
+            "temperature": 0.2}
+    )
     return response.text
 
 st.set_page_config(page_title="ATS Resume Scorer", page_icon=":guardsman:", layout="wide")
@@ -117,14 +142,15 @@ SCORING_CONFIG = {
             "email": 2,
             "phone": 2,
             "linkedin": 2,
-            "github_or_portfolio": 3
+            "github": 2,
+            "portfolio": 1
         }
     },
     "Resume Structure & Formatting": {
-        "weight": 15,
+        "weight": 20,
         "criteria": {
-            "section_headings": 4,
-            "consistent_formatting": 3,
+            "section_headings": 7,
+            "consistent_formatting": 5,
             "bullet_points": 3,
             "ideal_length": 2,
             "ats_friendly_layout": 3
@@ -143,10 +169,10 @@ SCORING_CONFIG = {
         }
     },
     "Experience & Internships": {
-        "weight": 20,
+        "weight": 25,
         "criteria": {
             "experience_section": 5,
-            "internship_or_work_experience": 5,
+            "internship_or_work_experience": 10,
             "technologies_mentioned": 5,
             "responsibilities_described": 5
         }
@@ -175,27 +201,17 @@ SCORING_CONFIG = {
             "certifications": 3,
             "achievements_or_awards": 2
         }
-    },
-    "Impact & Quantification": {
-        "weight": 10,
-        "criteria": {
-            "5_or_more_metrics": 10,
-            "3_to_4_metrics": 7,
-            "1_to_2_metrics": 4,
-            "none": 0
-        }
     }
 }
 
-Given the above scoring configuration, evaluate the resume against the job description.
+Given the above scoring configuration, evaluate the resume text against the job description.give points on all the criterias and 
+then give the total points gained in each category and then give the final ATS score out of 100 and also give the percentage match
+of the resume with the job description. 
 
 Display:
-1. A detailed table with Category, Weight, Criteria, Score, Points Gained and Comments.
+1. A detailed table with Category, Weight, Criteria, Score(as predefined), Points Gained, 
+total of each category(sum of points gained) after each category, and Comments, in least number of tokens possible.
 2. Final ATS Score out of 100.
-3. ATS Match Percentage.
-4. Strengths.
-5. Weaknesses.
-6. Recommendations.
 """
 
 if submit1:
@@ -237,7 +253,7 @@ elif submit4:
 elif submit5:
     if uploaded_file is not None:
         resume_text = extract_text_from_file(uploaded_file)
-        response = get_gemini_response(input_prompt5, resume_text, input_text)
+        response = get_gemini_response5(input_prompt5, resume_text, input_text)
         st.subheader("Response")
         st.write(response)
     else:
