@@ -85,13 +85,12 @@ The ATS score is generated using a weighted scoring framework consisting of mult
 | Category                        | Weight |
 | ------------------------------- | ------ |
 | Contact & Professional Presence | 10     |
-| Resume Structure & Formatting   | 15     |
+| Resume Structure & Formatting   | 20     |
 | Skills Relevance                | 20     |
 | Experience & Internships        | 20     |
-| Projects                        | 15     |
+| Projects                        | 20     |
 | Education                       | 5      |
 | Certifications & Achievements   | 5      |
-| Impact & Quantification         | 10     |
 
 Total Weight = 100
 
