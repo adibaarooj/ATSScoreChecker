@@ -1,6 +1,10 @@
 # ATS Resume Analyzer
 
+
+
 https://atsscorechecker-adiba.streamlit.app/
+
+
 
 ATS Resume Analyzer is a Streamlit-based web application that evaluates a candidate's resume against a given job description using Google's Gemini Large Language Model.(Here "gemini-2.5-flash")
 
