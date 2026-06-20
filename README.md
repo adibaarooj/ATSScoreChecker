@@ -14,6 +14,13 @@ The application accepts resumes in PDF, DOCX, and DOC formats, extracts the text
 
 ## Approach
 
+User Uploads Resume (PDF/DOCX/DOC) + Enters Job Description → 
+Text Extraction (PyPDF / python-docx / textract) → 
+Prompt Construction → 
+Gemini 2.5 Flash Analysis → 
+ATS Evaluation Engine → 
+ATS Score, Skill Match Analysis, Missing Keywords, Strengths, Weaknesses & Recommendations Displayed in Streamlit
+
 ### 1. Resume Upload
 
 The user uploads a resume in one of the following formats:
