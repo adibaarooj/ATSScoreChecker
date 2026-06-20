@@ -1,86 +1,100 @@
 from dotenv import load_dotenv
-
 load_dotenv()
-import base64
+
 import streamlit as st
 import os
-import io
-from PIL import Image 
-import pdf2image
+import tempfile
 import google.generativeai as genai
+from pypdf import PdfReader
+from docx import Document
+import textract
 
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-def get_gemini_response(input,pdf_cotent,prompt):
+def extract_text_from_file(uploaded_file):
+    file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+
+    if file_extension == ".pdf":
+        pdf_reader = PdfReader(uploaded_file)
+        text = ""
+        for page in pdf_reader.pages:
+            extracted = page.extract_text()
+            if extracted:
+                text += extracted + "\n"
+        return text
+
+    elif file_extension == ".docx":
+        doc = Document(uploaded_file)
+        text = "\n".join([para.text for para in doc.paragraphs])
+        return text
+
+    elif file_extension == ".doc":
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".doc") as temp_file:
+            temp_file.write(uploaded_file.read())
+            temp_path = temp_file.name
+
+        text = textract.process(temp_path).decode("utf-8")
+        os.remove(temp_path)
+        return text
+
+    else:
+        raise ValueError("Unsupported file format")
+
+def get_gemini_response(prompt, resume_text, job_description):
     model = genai.GenerativeModel("gemini-2.5-flash")
-    response=model.generate_content([input,pdf_content[0],prompt])
+
+    final_prompt = f"""
+{prompt}
+
+JOB DESCRIPTION:
+{job_description}
+
+RESUME:
+{resume_text}
+"""
+
+    response = model.generate_content(final_prompt)
     return response.text
 
-def input_pdf_setup(uploaded_file):
-    if uploaded_file is not None:
-        ## Convert the PDF to image
-        images = pdf2image.convert_from_bytes(
-        uploaded_file.read(),
-        poppler_path=r"C:\Program Files (x86)\Poppler\Library\bin"
+st.set_page_config(page_title="ATS Resume Scorer", page_icon=":guardsman:", layout="wide")
+
+st.header("ATS Scoring System")
+
+input_text = st.text_area("Job Description:", key="input")
+
+uploaded_file = st.file_uploader(
+    "Upload your Resume (PDF, DOCX, DOC)",
+    type=["pdf", "docx", "doc"]
 )
 
-        first_page=images[0]
-
-        # Convert to bytes
-        img_byte_arr = io.BytesIO()
-        first_page.save(img_byte_arr, format='JPEG')
-        img_byte_arr = img_byte_arr.getvalue()
-
-        pdf_parts = [
-            {
-                "mime_type": "image/jpeg",
-                "data": base64.b64encode(img_byte_arr).decode()  # encode to base64
-            }
-        ]
-        return pdf_parts
-    else:
-        raise FileNotFoundError("No file uploaded")
-
-## Streamlit App
-
-st.set_page_config(page_title="ATS Resume Scorer", page_icon=":guardsman:", layout="wide")
-st.header("ATS Scoring System")
-input_text=st.text_area("Job Description: ",key="input")
-uploaded_file=st.file_uploader("Upload your resume(PDF, DOCX, DOC)...",type=["pdf","DOCX","DOC"],key="file_uploader")
-
-
 if uploaded_file is not None:
-    st.write("PDF Uploaded Successfully")
+    st.success("Resume Uploaded Successfully")
 
-
-submit1 = st.button("Tell Me About the Resume.")
-
-submit2 = st.button("Areas of imporvement in the Resume.")
-
-submit3 = st.button("ATS Score of the Resume.")
-
-submit4 = st.button("Tell the skills that match and the skills that are missing in the resume.")
-
+submit1 = st.button("Tell Me About the Resume")
+submit2 = st.button("Areas of Improvement in the Resume")
+submit3 = st.button("ATS Score of the Resume")
+submit4 = st.button("Tell the Skills that Match and the Skills that are Missing in the Resume")
 submit5 = st.button("ATS Score out of 100")
 
 input_prompt1 = """
-You are an experienced Technical Human Resource Manager,your task is to review the provided resume against the job description. 
-Please share your professional evaluation on whether the candidate's profile aligns with the role. 
+You are an experienced Technical Human Resource Manager,your task is to review the provided resume against the job description.
+Please share your professional evaluation on whether the candidate's profile aligns with the role.
 Highlight the strengths and weaknesses of the applicant in relation to the specified job requirements.
 all in points and not paragraphs
 """
 
 input_prompt2 = """
-You are an experienced Technical Human Resource Manager,your task is to review the provided resume against the job description. 
-Please share your professional evaluation on how the candidate can improve their skills to better align with the role. 
+You are an experienced Technical Human Resource Manager,your task is to review the provided resume against the job description.
+Please share your professional evaluation on how the candidate can improve their skills to better align with the role.
 Highlight areas of improvement and suggest relevant training or experience that would enhance their profile.
 Actionable recommendations to improve the resume...all in points and not paragraphs
 """
 
 input_prompt3 = """
-You are an skilled ATS (Applicant Tracking System) scanner with a deep understanding of data science and ATS functionality, 
+You are an skilled ATS (Applicant Tracking System) scanner with a deep understanding of data science and ATS functionality,
 your task is to evaluate the resume against the provided job description. give me the percentage of match if the resume matches
 the job description. First the output should come as percentage and then keywords missing and last final thoughts.
+
 * An overall ATS-style score (out of 100)
 * Key strengths identified in the resume
 * Keywords missing from the resume
@@ -89,12 +103,12 @@ the job description. First the output should come as percentage and then keyword
 
 input_prompt4 = """
 You are an experienced Technical Human Resource Manager, your task is to analyze the provided resume against the job description.
-You are an skilled ATS (Applicant Tracking System) scanner with a deep understanding of data science and ATS functionality, 
-your task is to evaluate the resume against the provided job description 
+You are an skilled ATS (Applicant Tracking System) scanner with a deep understanding of data science and ATS functionality,
+your task is to evaluate the resume against the provided job description.
 Please identify the skills that match and the skills that are missing in the resume.
 """
 
-input_prompt5 = """ 
+input_prompt5 = """
 SCORING_CONFIG = {
     "Contact & Professional Presence": {
         "weight": 10,
@@ -173,52 +187,58 @@ SCORING_CONFIG = {
     }
 }
 
-Given the above scoring configuration, please evaluate the provided resume against the job description. and display in the 
-format of a table with the following columns: Category, Weight, Criteria, Score,points gained and Comments.
-also give a final score out of 100 and percentage based on the weighted average of the scores in each category.   
+Given the above scoring configuration, evaluate the resume against the job description.
+
+Display:
+1. A detailed table with Category, Weight, Criteria, Score, Points Gained and Comments.
+2. Final ATS Score out of 100.
+3. ATS Match Percentage.
+4. Strengths.
+5. Weaknesses.
+6. Recommendations.
 """
 
 if submit1:
     if uploaded_file is not None:
-        pdf_content=input_pdf_setup(uploaded_file)
-        response=get_gemini_response(input_prompt1,pdf_content,input_text)
-        st.subheader("The Repsonse is")
+        resume_text = extract_text_from_file(uploaded_file)
+        response = get_gemini_response(input_prompt1, resume_text, input_text)
+        st.subheader("Response")
         st.write(response)
     else:
-        st.write("Please uplaod the resume")
+        st.error("Please upload a resume")
 
 elif submit2:
     if uploaded_file is not None:
-        pdf_content=input_pdf_setup(uploaded_file)
-        response=get_gemini_response(input_prompt2,pdf_content,input_text)
-        st.subheader("The Repsonse is")
+        resume_text = extract_text_from_file(uploaded_file)
+        response = get_gemini_response(input_prompt2, resume_text, input_text)
+        st.subheader("Response")
         st.write(response)
     else:
-        st.write("Please uplaod the resume")
+        st.error("Please upload a resume")
 
 elif submit3:
     if uploaded_file is not None:
-        pdf_content=input_pdf_setup(uploaded_file)
-        response=get_gemini_response(input_prompt3,pdf_content,input_text)
-        st.subheader("The Repsonse is")
+        resume_text = extract_text_from_file(uploaded_file)
+        response = get_gemini_response(input_prompt3, resume_text, input_text)
+        st.subheader("Response")
         st.write(response)
     else:
-        st.write("Please uplaod the resume")
+        st.error("Please upload a resume")
 
 elif submit4:
     if uploaded_file is not None:
-        pdf_content=input_pdf_setup(uploaded_file)
-        response=get_gemini_response(input_prompt4,pdf_content,input_text)
-        st.subheader("The Repsonse is")
+        resume_text = extract_text_from_file(uploaded_file)
+        response = get_gemini_response(input_prompt4, resume_text, input_text)
+        st.subheader("Response")
         st.write(response)
     else:
-        st.write("Please uplaod the resume")
+        st.error("Please upload a resume")
 
 elif submit5:
     if uploaded_file is not None:
-        pdf_content=input_pdf_setup(uploaded_file)
-        response=get_gemini_response(input_prompt5,pdf_content,input_text)
-        st.subheader("The Repsonse is")
+        resume_text = extract_text_from_file(uploaded_file)
+        response = get_gemini_response(input_prompt5, resume_text, input_text)
+        st.subheader("Response")
         st.write(response)
     else:
-        st.write("Please uplaod the resume")
+        st.error("Please upload a resume")
